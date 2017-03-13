@@ -1,4 +1,4 @@
-# enconding: utf-8
+# encoding: utf-8
 
 import sys;
 import string;
@@ -7,9 +7,16 @@ import re;
 import os;
 import numpy;
 import os.path;
+from bs4 import BeautifulSoup
+import bs4.element
 
-finpath = 'data/title_and_abs'
-foutpath = 'output'
+reload(sys);
+sys.setdefaultencoding('utf-8')
+
+basepath = os.getcwd().replace('\\', '/');
+finpath = basepath + '/data/computer'
+foutpath = basepath + '/output'
+
 
 class FileInfo(object):
     def __init__(self):
@@ -18,21 +25,14 @@ class FileInfo(object):
         self.frequence = {}
         self.wordcount = 0
 
-def GetFreq(filename):
+
+def GetFreq(f_data):
     data = FileInfo()
-    fin = open(filename)
-    data.name = filename
-    
-    f_data = fin.read()
-    
-    f_data_ucs = f_data.decode('utf-8')
-    f_data = string.join(re.findall(u'[\u4e00-\u9fff]+', f_data_ucs))
-    
     cutf = jieba.cut(f_data)
     out_data = string.join(cutf)
     
-    #fout = open(foutpath + '/' + '1.txt', 'w')
-    #fout.write(out_data)
+    # fout = open(foutpath + '/' + '1.txt', 'w')
+    # fout.write(out_data)
     
     wordlist = out_data.split()
     
@@ -45,11 +45,27 @@ def GetFreq(filename):
         data.wordcount += 1
     
     data.frequence = total
-    fin.close
     return data
-    #for (key, value) in total.items():
+    # for (key, value) in total.items():
     #    fout.write(str(key) + ' ' + str(value) + '\n')
-    
+
+
+def fetchdatafromxml(filename):
+    res = ""
+    soup = BeautifulSoup(open(filename), u'html.parser')
+
+    p = soup.find("p", class_=u'abstracts')
+    if p is None or p.string is None:
+        return ""
+    else:
+        res = res + string.strip(soup.title.string) + '\n'
+        for item in p.contents:
+            if type(item) == bs4.element.NavigableString:
+                res = res + string.strip(item.string)
+    res = string.join(re.findall(u'[\u4e00-\u9fff]+', res))
+    return res
+
+
 if __name__ == '__main__':
     filelist = os.listdir(finpath)
     filedata = []
@@ -57,9 +73,12 @@ if __name__ == '__main__':
     for subpath in filelist:
         path = os.path.join(finpath, subpath)
         if os.path.isfile(path):
-            filedata.append(GetFreq(path))
-            filedata[filcount].subname = subpath
-            filcount += 1
+            s = fetchdatafromxml(path)
+            if s != "":
+                filedata.append(GetFreq(s))
+                filedata[filcount].name = path
+                filedata[filcount].subname = subpath
+                filcount += 1
     
     for data in filedata:
         tf_idf = []
@@ -70,11 +89,11 @@ if __name__ == '__main__':
                 if fil.frequence.has_key(k):
                     idf_J += 1
                     
-            idf = numpy.log10(float(filcount / (1 + idf_J)))
+            idf = numpy.log10(float(filcount) / float(1 + idf_J))
             tf_idf.append((k, tf*idf))
     
         tf_idf.sort(key=lambda w: w[1], reverse = 1)
-        fout = open(foutpath + '/' + data.subname, "w")
+        fout = open(os.path.join(foutpath, data.subname + '.txt'), 'w')
         
         for i in range(0, min(len(tf_idf), 4) - 1):
             fout.write(str(tf_idf[i][0]) + ' ')  
@@ -83,9 +102,3 @@ if __name__ == '__main__':
             fout.write(str(key) + ' ' + str(value) + '\n')
             
         fout.close()
-        
-        
-        
-        
-        
-        
