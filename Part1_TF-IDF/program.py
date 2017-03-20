@@ -24,6 +24,7 @@ class FileInfo(object):
         self.subname = ''
         self.frequence = {}
         self.wordcount = 0
+        self.recommended = []
 
 
 def GetFreq(f_data):
@@ -62,9 +63,30 @@ def fetchdatafromxml(filename):
         for item in p.contents:
             if type(item) == bs4.element.NavigableString:
                 res = res + string.strip(item.string)
-    res = string.join(re.findall(u'[\u4e00-\u9fff]+', res))
+    t = re.findall(u'[A-Za-z\u4e00-\u9fff]+', res)
+    res = string.join(t)
     return res
 
+def fetchkeywordfromxml(filename):
+    kw_list = []
+    soup = BeautifulSoup(open(filename), u'html.parser')
+    lists = soup.find_all("dt")
+    for list in lists:
+        if type(list) == bs4.element.Tag:
+            if list.string != None:
+                keyword = ""
+                keyword = list.string.strip().replace(u' ', u'')
+                if keyword.find(u'关键词') == 0:
+                    nextitem = list
+                    while nextitem.name != u'dd':
+                        nextitem = nextitem.next_sibling
+                    for a in nextitem.children:
+                        keyword = a.string
+                        if keyword != None and keyword.strip().replace(u' ', u'') != u'':
+                            keyword = keyword.strip().replace(u' ', u'')
+                            if kw_list.count(keyword) == 0:
+                                kw_list.append(keyword)
+    return kw_list
 
 if __name__ == '__main__':
     filelist = os.listdir(finpath)
@@ -78,6 +100,7 @@ if __name__ == '__main__':
                 filedata.append(GetFreq(s))
                 filedata[filcount].name = path
                 filedata[filcount].subname = subpath
+                filedata[filcount].recommended = fetchkeywordfromxml(path)
                 filcount += 1
     
     for data in filedata:
@@ -95,10 +118,25 @@ if __name__ == '__main__':
         tf_idf.sort(key=lambda w: w[1], reverse = 1)
         fout = open(os.path.join(foutpath, data.subname + '.txt'), 'w')
         
-        for i in range(0, min(len(tf_idf), 4) - 1):
+        fout.write(u'TF-IDF 计算得到关键词:\n')
+        for i in range(0, min(len(tf_idf) - 1, 6)):
             fout.write(str(tf_idf[i][0]) + ' ')  
+        fout.write('\n')
+        '''
+        if you want to output all the data
+        reckoned by TF-IDF, remove this blk cmt.
+        
         fout.write('\n\n')
         for (key, value) in tf_idf:
             fout.write(str(key) + ' ' + str(value) + '\n')
-            
+        '''
+        
+        '''
+        Here we want to extract the original
+        recommended tag for the file.
+        '''
+        fout.write('原文作者推荐关键词:\n')
+        for keyword in data.recommended:
+            fout.write(str(keyword) + ' ')
+        fout.write('\n')
         fout.close()
