@@ -8,4 +8,12 @@ Part2_Text_Classify/data/
 Part2_Text_Classify/src/
 Part2_Text_Classify/test/
 
+Part2_Text_Classify/cached_train
+Part2_Text_Classify/cached_valid
+Part2_Text_Classify/cached_test
+
+Part2_Text_Classify/data_train
+Part2_Text_Classify/data_valid
+Part2_Text_Classify/data_test
+
 

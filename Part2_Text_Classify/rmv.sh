@@ -1,3 +1,2 @@
-rm -R -f ./nor_cache
-rm -R -f ./tfidf_cache
+rm -R -f ./cached_train -R -f ./tfidf_cache
 rm -R -f ./word_cache

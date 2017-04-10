@@ -7,9 +7,10 @@ import re
 import math
 import string
 import numpy as np
-from sklearn import linear_model
-from sklearn import datasets
-from sklearn.linear_model import LogisticRegression
+from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.linear_model import SGDClassifier
+from sklearn.pipeline import Pipeline
 
 reload(sys);
 sys.setdefaultencoding('utf-8')
@@ -19,19 +20,17 @@ trainpath = os.path.join(basepath, u'data_train')
 testpath = os.path.join(basepath, u'data_test')
 validpath = os.path.join(basepath, u'data_valid')
 
-svm_cache_path = os.path.join(basepath, u'svm_cache')
-nor_cache_path = os.path.join(basepath, u'nor_cache')
-jieba_cache_path = os.path.join(basepath, u'word_cache')
-tfidf_cache_path = os.path.join(basepath, u'tfidf_cache')
+train_cachepath = os.path.join(basepath, u'cached_train')
+test_cachepath = os.path.join(basepath, u'cached_test')
+valid_cachepath = os.path.join(basepath, u'cached_valid')
 
-TF_IDF_MAX = 4
-# Here I Want To Use
-# 
+# TF_IDF_MAX = 4
 
 def DetectPath(fullPathName):
     if not os.path.exists(fullPathName):
             os.makedirs(fullPathName)
 
+'''
 class FileInfo(object):
     def __init__(self):
         self.class_ = '' # like, Art, Computer, Science, etc.
@@ -47,243 +46,157 @@ class IndexInfo(object):
         # predict class, and yet converted into 
         # integer value
         self.tag = []
+'''
 
-def LoadFile(AbsFilePath):
+class TrainDataType(object):
+    def __init__(self):
+        # the 
+        self.y = []
+        self.data = []
+        self.X_train_counts = None
+        self.target_name = []
+        self._target_name_solve = {}
+        self.file_name = []
+    
+    def ExistTarget(self, name):
+        return self._target_name_solve.has_key(name)
+    
+    def AddTarget(self, name):
+        if not self._target_name_solve.has_key(name):
+            i = len(self._target_name_solve)
+            self._target_name_solve[name] = i
+            self.target_name.append(name)
+            return i
+        else:
+            return self._target_name_solve[name]
+    
+    def GetTargetId(self, name):
+        if not self._target_name_solve.has_key(name):
+            return self._target_name_solve[name]
+        
+
+
+def LoadFileSp(AbsFilePath):
     fin = open(AbsFilePath, 'r')
     fdata = fin.read()
-    
+    fin.close()
     #convert data from utf-8 to ucs
     data_ucs = fdata.decode('utf-8')
-    #remove all punctuation
-    data_ucs = ''.join(re.findall(u'[a-zA-z\u4e00-\u9fff]+', \
-                                  data_ucs))
-    fin.close()
-    #return data in ucs
     return data_ucs
 
-def WordSplit(textdata):
-    result = {}
-    words = jieba.cut(textdata)
-    count = 0
-    for word in words:
-        count += 1
-        if result.has_key(word):
-            result[word] += 1
-        else:
-            result[word] = 1;
-    return (result, count)
+def LoadFile(AbsFilePath):
+    data_ucs = LoadFileSp(AbsFilePath)
+    #remove all punctuation
+    data_ucs_chs = ''.join(re.findall(u'[\u4e00-\u9fff]+', \
+                                  data_ucs))
+    list_eng =  re.findall(u'[a-zA-z\s]+', data_ucs)
+    data_ucs_eng = ""
+    for word in list_eng:
+        word = word.strip()
+        if len(word) > 0:
+            data_ucs_eng += ' ' + word.strip()
+    return data_ucs_chs + " " + data_ucs_eng.strip()
 
-def LoadTrainData(trainfilesPath):
-    result = []
-    if not os.path.exists(trainfilesPath):
-        raise ValueError
-    # fetch all the child folder
-    for subfolder in os.listdir(trainfilesPath):
-        subfolderfullpath = os.path.join(trainfilesPath, \
-                                         subfolder)
-        if os.path.isdir(subfolderfullpath):
-            # set current classname
-            clsName = subfolder
-            for docName in os.listdir(subfolderfullpath):
-                docfullpath = os.path.join(subfolderfullpath, \
-                                           docName)
-                if os.path.isfile(docfullpath):
-                    finf = FileInfo()
-                    # conf: classname, filename
-                    #  and relative name
-                    finf.class_ = clsName
-                    finf.filename = docfullpath
-                    finf.subfilename = docName
-                    # call loadfile
-                    fdata = LoadFile(docfullpath)
-                    # call jieba
-                    (finf.frequence, finf.wordcount) = WordSplit(fdata)
-                    # write wordcount
-                    # write frequency
-                    result.append(finf)
-    return result
-
-def TF_IDF(traindata):
-    filcount = len(traindata)
-    for fdata in traindata:
-        tf_idf = []
-        for (k, v) in fdata.frequence.items():
-            tf = float(v) / float(fdata.wordcount)
-            idf_J = 0
-            for fil in traindata:
-                if fil.frequence.has_key(k):
-                    idf_J += 1
-                    
-            idf = math.log10(float(filcount) / float(1 + idf_J))
-            tf_idf.append((k, tf*idf))
-    
-        tf_idf.sort(key=lambda w: w[1], reverse = 1)
-        
-        for i in range(0, min(len(tf_idf), TF_IDF_MAX)):
-            fdata.tag.append(tf_idf[i][0])
-
-#fetch cache data files
-def FetchCatchFiles(clsDict, clsData):
-    trainFile = os.listdir(jieba_cache_path)
-    for fil in trainFile:
-        fullpath = os.path.join(jieba_cache_path, \
-                                fil)
-        if os.path.isfile(fullpath):
-            # create a new classDict 
-            if not clsDict.has_key(fil):
-                clsDict[fil] = len(clsDict)
-                # use Dict, instead of List
-                clsData.append({})
-            idx = clsDict[fil]
-            fincache = open(fullpath, 'r')
-            fdata = fincache.read()
-            fdata_ucs = fdata.decode('utf-8')
-            '''
-            at first, I use a list to save all
-            the TF-IDF hi-freq word
-            
-            But now I want to use dict, because 
-            of its high search speed.                
-            '''
-            word_i = 0
-            for tword in fdata_ucs.split():
-                clsData[idx][tword] = word_i 
-                word_i += 1
-
-            fincache.close()
-    
-    index_list = []
-    tfidf_files = os.listdir(tfidf_cache_path)
-    for cls in tfidf_files:
-        fullpath = os.path.join(tfidf_cache_path, \
-                                cls)
-        if os.path.isdir(fullpath):
-            idx = clsDict[cls]
-            cls_fils = os.listdir(fullpath)
-            
-            for cls_fil in cls_fils:
-                filpath = os.path.join(fullpath, cls_fil)
-                if os.path.isfile(filpath):
-                    index_fil = IndexInfo()
-                    index_fil.y = idx + 1
-                    fin = open(filpath, 'r')
-                    fdata = fin.read()
-                    for strnum in fdata.split():
-                        index_fil.tag.append(string.atoi(strnum))
-                    
-                    index_list.append(index_fil)
-    return index_list
-    
-def CalcCatchFiles(clsDict, clsData):
-    # if there is no cache tf-idf files
-    traindata = LoadTrainData(trainpath)
-    # get total file number
-    TF_IDF(traindata)
-
-    # for each file
-    # in those traindata files
-    clsDictMax = {}
-    for fdata in traindata:
-        if not clsDict.has_key(fdata.class_):
-            clsDict[fdata.class_] = len(clsDict)
-            clsData.append({})
-        idx = clsDict[fdata.class_]
-        
-        # detect whether a word
-        # exists in the dictionary
-        
-        # word_index
-        word_i = 0
-        if clsDictMax.has_key(idx):
-            word_i = clsDictMax[idx]
-        for word in fdata.tag:
-            if not clsData[idx].has_key(word):
-                clsData[idx][word] = word_i
-                word_i += 1
-        clsDictMax[idx] = word_i
-        
-    for (classname, idx) in clsDict.items():
-        fcache = open(os.path.join(jieba_cache_path, \
-                                   classname), 'w')
-        listout = clsData[idx].items();
-        # sort via index
-        listout.sort(cmp = lambda a, b:a[1]-b[1])
-        for (w, i) in listout:
-            fcache.write(w + '\n')
-        fcache.close()
-        
-    # since we now have calc all the
-    # traindata, we made a tf-idf cache
-    # for all the original train data    
-    
-    index_list = []
-    
-    for t_fil in traindata:
-        index_fil = IndexInfo()
-        idx = clsDict[t_fil.class_]
-        index_fil.y = idx
-        # make sure the output directory exists
-        DetectPath(os.path.join(tfidf_cache_path, \
-                                t_fil.class_))
-        fcache = open(os.path.join(tfidf_cache_path, \
-                                   t_fil.class_ + '/' + \
-                                   t_fil.subfilename), 'w')
-        for t in t_fil.tag:
-            tag_id = clsData[idx][t]
-            index_fil.tag.append(tag_id + 1)
-            fcache.write(str(tag_id) + '\n')
-        fcache.close()
-        index_list.append(index_fil)
-    return index_list
-
-def MakeX(train_data, wordcountsum, wordcnt):
-    filecnt = len(train_data)
-    res = []
-    for fil in train_data:
-        line = []
-        for t in fil.tag:
-            line.append(t)
-        res.append(line)
-    return res;
-
-def MakeY(train_data):
-    filecnt = len(train_data)
-    res = np.zeros([filecnt, 1])
-    for i in range(0, filecnt):
-        res[i] = train_data[i].y
-    return res;
-
-if __name__ == '__main__':
-    print('Choose one vs all algorithm (0) or SVM algorithm (1)')
-    calcMode = 0 #input('Number 0 ~ 1?\n')
-    if calcMode == 0: # One Vs All
-        print 'One Vs All Selected'
-        DetectPath(nor_cache_path)
+# function definition of BuildCache
+# obj: train_data object containing text dataq
+# data_path
+# 
+def BuildCache(data_obj, data_path, cached_path):
+    DetectPath(cached_path)
+    contents = os.listdir(cached_path)
+    if len(contents) == 0:
+        print(u'Creating tokenized data...\n')
+        DetectPath(data_path)
+        contents = os.listdir(data_path)
+        for classname in contents:
+            contpath = os.path.join(data_path, \
+                                    classname)
+            if os.path.isdir(contpath):
+                savecontpath = os.path.join(cached_path, \
+                                            classname)
+                DetectPath(savecontpath)
+                files = os.listdir(contpath)
+                for filename in files:
+                    filepath = os.path.join(contpath, \
+                                            filename)
+                    if os.path.isfile(filepath):
+                        fildata = LoadFile(filepath)
+                        res = jieba.cut(fildata)
+                        fildata = " ".join(res)
+                                                
+                        i = data_obj.AddTarget(classname)
+                        data_obj.y.append(i)
+                        data_obj.file_name.append(filename)
+                        data_obj.data.append(fildata)
+                        fout = open(os.path.join(savecontpath, \
+                                                 filename), 'w')
+                        fout.write(fildata)
+                        fout.close()
+        fout = open(os.path.join(cached_path, u'.class'), 'w')
+        for word in data_obj.target_name:
+            fout.write(word + '\n')
+        fout.close()
     else:
-        print 'SVM Selected'
-        DetectPath(svm_cache_path)
-    print '================================'
-    # make the cache folder to save temp data
-    DetectPath(jieba_cache_path)
-    DetectPath(tfidf_cache_path)
-    
-    clsDict = {}
-    clsData = []
-    train_data = []
-    trainFile = os.listdir(jieba_cache_path)
-    if len(trainFile) == 0:
-        train_data = CalcCatchFiles(clsDict, clsData)
-    else:
-        # detect cache file, using cached TF-IDF file:
-        train_data = FetchCatchFiles(clsDict, clsData)
-    
-    wordcountsum = []
-    sum_=0
-    for i in range(0, len(clsData)):
-        wordcountsum.append(sum_)
-        sum_+=len(clsData[i])
+        print(u'Loading cached data...\n')
+        classfilpath = os.path.join(cached_path, u'.class')
+        if os.path.exists(classfilpath):
+            dat = LoadFileSp(classfilpath)
+            data_obj.target_name.extend(dat.split())
 
-    X = MakeX(train_data, clsData, sum_)
-    y = MakeY(train_data)
-    
-    
+        for classname in contents:
+            contpath = os.path.join(cached_path, \
+                                    classname)
+            if os.path.isdir(contpath):
+                files = os.listdir(contpath)
+                for filename in files:
+                    filepath = os.path.join(contpath, \
+                                            filename)
+                    if os.path.isfile(filepath):
+                        fildata = LoadFileSp(filepath)
+                        i = data_obj.AddTarget(classname)
+                        data_obj.y.append(i)
+                        data_obj.file_name.append(filename)
+                        data_obj.data.append(fildata)
+
+train_data = TrainDataType()
+valid_data = TrainDataType()
+test_data = TrainDataType()
+BuildCache(train_data, trainpath, train_cachepath)
+BuildCache(valid_data, validpath, valid_cachepath)
+'''
+text_clf = Pipeline([('vect', CountVectorizer()), \
+                     ('tfidf', TfidfTransformer()), \
+                     ('NBclf', MultinomialNB())])
+'''
+# the following use SVC model
+
+text_clf = Pipeline([('vect', CountVectorizer()), \
+                     ('tfidf', TfidfTransformer()), \
+                     ('NBclf', SGDClassifier(loss='hinge', \
+                               penalty='l2', alpha=1e-3, \
+                               n_iter=5, random_state=42)), \
+                     ])
+
+_clf = text_clf.fit(train_data.data, train_data.y)
+predicted = text_clf.predict(valid_data.data)
+
+print(np.mean(predicted == valid_data.y))
+from sklearn import metrics
+print(metrics.classification_report(valid_data.y, \
+                              predicted, \
+                              None, \
+                              valid_data.target_name))
+
+# word vectorizer processor
+# print('Creating Text Vector for Training data...')
+# count_vct = CountVectorizer()
+# X_train_counts = count_vct.fit_transform(train_data.data)
+
+# define a sklearn Tfidf transformer
+# tfidf_transformer = TfidfTransformer()
+# tfidf fit and transform data
+# X_train_tfidf = tfidf_transformer.fit_transform(X_train_counts)
+# X_train_tfidf.shape
+# clf = MultinomialNB().fit(X_train_tfidf, train_data.y)
+
+
