@@ -1,4 +1,8 @@
+*.doc
+*.docx
 .idea/
+
+Part1_TF-IDF/output/
 Part1_TF-IDF_TF-IDF/.idea/
 Part1_TF-IDF/results.txt
 Part1_TF-IDF/data/pro_res.txt
