@@ -24,29 +24,13 @@ train_cachepath = os.path.join(basepath, u'cached_train')
 test_cachepath = os.path.join(basepath, u'cached_test')
 valid_cachepath = os.path.join(basepath, u'cached_valid')
 
+other_tag = u'_Others_'
+
 # TF_IDF_MAX = 4
 
 def DetectPath(fullPathName):
     if not os.path.exists(fullPathName):
             os.makedirs(fullPathName)
-
-'''
-class FileInfo(object):
-    def __init__(self):
-        self.class_ = '' # like, Art, Computer, Science, etc.
-        self.filename = ''
-        self.subfilename = ''
-        self.wordcount = 0
-        self.frequence = {}
-        self.tag = []
-
-class IndexInfo(object):
-    def __init__(self):
-        self.y = ''
-        # predict class, and yet converted into 
-        # integer value
-        self.tag = []
-'''
 
 class TrainDataType(object):
     def __init__(self):
@@ -71,10 +55,8 @@ class TrainDataType(object):
             return self._target_name_solve[name]
     
     def GetTargetId(self, name):
-        if not self._target_name_solve.has_key(name):
+        if self._target_name_solve.has_key(name):
             return self._target_name_solve[name]
-        
-
 
 def LoadFileSp(AbsFilePath):
     fin = open(AbsFilePath, 'r')
@@ -96,6 +78,19 @@ def LoadFile(AbsFilePath):
         if len(word) > 0:
             data_ucs_eng += ' ' + word.strip()
     return data_ucs_chs + " " + data_ucs_eng.strip()
+
+# here I want to fetch the 
+# test data file correct answers
+def LoadSrcFile():
+    SrcTestDict = {}
+    srcfilepath = os.path.join(basepath, 'src/id2class.txt')
+    with open(srcfilepath, 'r') as fin:
+        filedata = fin.readlines()
+        
+        for line in filedata:
+            linedata = line.split()
+            SrcTestDict[linedata[0]] = linedata[1]
+    return SrcTestDict
 
 # function definition of BuildCache
 # obj: train_data object containing text dataq
@@ -136,13 +131,15 @@ def BuildCache(data_obj, data_path, cached_path):
         for word in data_obj.target_name:
             fout.write(word + '\n')
         fout.close()
+        data_obj.AddTarget(other_tag)
     else:
         print(u'Loading cached data...\n')
         classfilpath = os.path.join(cached_path, u'.class')
         if os.path.exists(classfilpath):
             dat = LoadFileSp(classfilpath)
-            data_obj.target_name.extend(dat.split())
-
+            for cls in dat.split():
+                data_obj.AddTarget(cls)
+        
         for classname in contents:
             contpath = os.path.join(cached_path, \
                                     classname)
@@ -157,25 +154,95 @@ def BuildCache(data_obj, data_path, cached_path):
                         data_obj.y.append(i)
                         data_obj.file_name.append(filename)
                         data_obj.data.append(fildata)
+        data_obj.AddTarget(other_tag)
+        
+# this function should just work like 
+# BuildCache, but it doesn't provide
+# support for classification in advance
+def BuildTestCache(data_obj, data_path, cached_path, predictDict, trainCls, includeOther):
+    DetectPath(cached_path)
+    contents = os.listdir(cached_path)
+    if len(contents) == 0:
+        print(u'Creating tokenized data for test data...\n')
+        DetectPath(data_path)
+        files = os.listdir(data_path)
+        # here we detect test files in the folder
+        for filename in files:
+            filepath = os.path.join(data_path, \
+                                    filename)
+            if os.path.isfile(filepath):
+                savecontpath = os.path.join(cached_path, \
+                                filename)
+                fildata = LoadFile(filepath)
+                res = jieba.cut(fildata)
+                fildata = " ".join(res)
+            
+                fout = open(savecontpath, 'w')
+                fout.write(fildata)
+                fout.close()
+                
+                
+                purefilename = os.path.splitext(filename)
+                if predictDict.has_key(purefilename[0]):
+                    s = predictDict[purefilename[0]]
+                    if trainCls.GetTargetId(s) is not None:
+                        data_obj.y.append(trainCls.GetTargetId(s))
+                    else:
+                        if includeOther == False:
+                            continue
+                        # means other class
+                        data_obj.y.append(trainCls.GetTargetId(other_tag))
+                    # there is no need to add
+                    # preset class id here
+                    data_obj.file_name.append(filename)
+                    # the data after being processed.
+                    data_obj.data.append(fildata)
+
+                    
+    else:
+        print(u'Loading cached test data...\n')
+        for filename in contents:
+            filepath = os.path.join(cached_path, filename)
+            if os.path.isfile(filepath):
+                fildata = LoadFileSp(filepath)
+                
+                purefilename = os.path.splitext(filename)
+                if predictDict.has_key(purefilename[0]):
+                    s = predictDict[purefilename[0]]
+                    if trainCls.GetTargetId(s) is not None:
+                        data_obj.y.append(trainCls.GetTargetId(s))
+                    else:
+                        if includeOther == False:
+                            continue
+                        # means other class
+                        data_obj.y.append(trainCls.GetTargetId(other_tag))
+                data_obj.file_name.append(filename)
+                data_obj.data.append(fildata)
 
 train_data = TrainDataType()
 valid_data = TrainDataType()
 test_data = TrainDataType()
 BuildCache(train_data, trainpath, train_cachepath)
 BuildCache(valid_data, validpath, valid_cachepath)
-'''
-text_clf = Pipeline([('vect', CountVectorizer()), \
+
+print('''Choose a classifer:
+0. Naive Bayes
+1. SGD (Stochastic gradient descent)
+''')
+chose = 1
+text_clf = None
+if chose == 0:
+    text_clf = Pipeline([('vect', CountVectorizer()), \
                      ('tfidf', TfidfTransformer()), \
                      ('NBclf', MultinomialNB())])
-'''
+else:
 # the following use SVC model
-
-text_clf = Pipeline([('vect', CountVectorizer()), \
-                     ('tfidf', TfidfTransformer()), \
-                     ('NBclf', SGDClassifier(loss='hinge', \
-                               penalty='l2', alpha=1e-3, \
-                               n_iter=5, random_state=42)), \
-                     ])
+    text_clf = Pipeline([('vect', CountVectorizer()), \
+                         ('tfidf', TfidfTransformer()), \
+                         ('NBclf', SGDClassifier(loss='hinge', \
+                                   penalty='l2', alpha=1e-3, \
+                                   n_iter=5, random_state=42)), \
+                         ])
 
 _clf = text_clf.fit(train_data.data, train_data.y)
 predicted = text_clf.predict(valid_data.data)
@@ -187,6 +254,33 @@ print(metrics.classification_report(valid_data.y, \
                               None, \
                               valid_data.target_name))
 
+# in the following directions, we want to predict
+# the class of test text files.
+print('Now deal with test files\n')
+
+
+test_preDict = LoadSrcFile()
+BuildTestCache(test_data, testpath, test_cachepath, \
+               test_preDict, train_data, True)
+tested = text_clf.predict(test_data.data)
+print('Output the test report:\n')
+print(metrics.classification_report(test_data.y, \
+                              tested, \
+                              None, \
+                              train_data.target_name))
+fres = open(os.path.join(basepath, 'test_data.txt'), 'w')
+for index in range(0, len(test_data.y)):
+    purfile = os.path.splitext(test_data.file_name[index])
+    line = purfile[0] + '\t' + \
+                test_preDict[purfile[0]] + '\t' + \
+                train_data.target_name[tested[index]] + '\t'
+    if tested[index] != test_data.y[index]:
+        line += '!'
+        if test_data.y[index] == train_data.GetTargetId(other_tag):
+            line += '**'
+    line += '\n';
+    fres.write(line)
+fres.close()
 # word vectorizer processor
 # print('Creating Text Vector for Training data...')
 # count_vct = CountVectorizer()
