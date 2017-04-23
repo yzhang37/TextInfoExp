@@ -1,5 +1,6 @@
 *.doc
 *.docx
+*.DS_Store
 .idea/
 
 Part1_TF-IDF/output/
