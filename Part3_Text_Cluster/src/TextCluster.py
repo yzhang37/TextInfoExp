@@ -14,12 +14,12 @@ from collections import Counter
 from sklearn import metrics
 import matplotlib.pyplot as plt
 
-
 class TextCluster(object):
     # 初始化函数,重写父类函数
     def __init__(self):
         pass
 
+    #分词处理程序
     def seg_words(self, sentence):
         seg_list = jieba.cut(sentence)  # 默认是精确模式
         return " ".join(seg_list)       # 分词，然后将结果列表形式转换为字符串
@@ -28,7 +28,9 @@ class TextCluster(object):
     def load_userdictfile(self, dict_file):
         jieba.load_userdict(dict_file)
 
+    # 加载文件
     def load_processfile(self, process_file):
+		# 语料库列表
         corpus_list = []
         try:
             fp = open(process_file, "r")
@@ -40,6 +42,7 @@ class TextCluster(object):
             logging.error(traceback.format_exc())
             return False, "get process file fail"
 
+    # 输出文件
     def output_file(self, out_file, item):
 
         try:
@@ -54,6 +57,7 @@ class TextCluster(object):
     def __del__(self):
         pass
 
+    # 处理(待处理文件, tf_ResFileName, tfidf_ResFileName (TFIDF的资源文件), 聚类个数, 聚类资源文件)
     def process(self, process_file, tf_ResFileName, tfidf_ResFileName, num_clusters, cluster_ResFileName):
         try:
             sen_seg_list = []

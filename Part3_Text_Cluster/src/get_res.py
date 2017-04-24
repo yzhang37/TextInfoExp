@@ -12,7 +12,6 @@ from sklearn import metrics
 reload(sys)
 sys.setdefaultencoding("utf-8")
 
-
 # 将文本汇总成一个txt
 def get_text():
     base_path = "C:/Users/kaifun/Desktop/ass_TIP/TextInfoExp/Part3_Text_Cluster/data/"

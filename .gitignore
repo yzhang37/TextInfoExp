@@ -22,9 +22,16 @@ Part2_Text_Classify/cached_test
 Part2_Text_Classify/data_train
 Part2_Text_Classify/data_valid
 Part2_Text_Classify/data_test
+Part2_Text_Classify/test_data.txt
 
 Part3_Text_Cluster/data_temp/
 Part3_Text_Cluster/data_temp2/
 Part3_Text_Cluster/res_temp/
 Part3_Text_Cluster/src/*.txt
 Part3_Text_Cluster/data.txt
+
+
+Part3_Text_Cluster/cached_offline/
+Part3_Text_Cluster/out_kmeans.txt
+Part3_Text_Cluster/out_tf.txt
+Part3_Text_Cluster/out_tfidf.txt
