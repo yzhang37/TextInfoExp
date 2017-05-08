@@ -12,8 +12,10 @@ import string
 import numpy as np
 
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
-from sklearn.pipeline import Pipeline
+#from sklearn.pipeline import Pipeline
 from sklearn.cluster import KMeans
+from sklearn import metrics
+from collections import Counter
 
 reload(sys);
 sys.setdefaultencoding('utf-8')
@@ -21,6 +23,7 @@ sys.setdefaultencoding('utf-8')
 basepath = os.getcwdu()
 trainpath = os.path.join(basepath, u'data_offline')
 testpath = os.path.join(basepath, u'data_test')
+loadfilepath = os.path.join(basepath, u'')
 #validpath = os.path.join(basepath, u'data_valid')
 
 train_cachepath = os.path.join(basepath, u'cached_offline')
@@ -140,96 +143,164 @@ class Text_Cluster(object):
                         tf_ResFileName, \
                         tfidf_ResFileName, \
                         n, \
-                        cluster_ResFileName):
-        sen_seg_list = []
-        sen_file_list = []
-        
-        self.detect_path(cached_folder_path)
-        cached_files = self.complete_subpath(cached_folder_path, 
-                                            os.listdir(cached_folder_path))
-        if len(cached_files) == 0:
-            flag, lines, flist = self.load_processfolder(process_folder_path, True)
-            if flag == True:
-                sen_file_list = flist
-                for line in lines:
-                    sen_seg_list.append(self.segerate_word(line))
-                for i in range(0, len(flist)):
-                    self.output_file(\
-                        os.path.join(cached_folder_path, sen_file_list[i]), \
-                        sen_seg_list[i])
+                        cluster_ResFileName, \
+                        valid_filename = u''):
+        try:
+            sen_seg_list = []
+            sen_file_list = []
+            sen_file_dict = {}
+            
+            self.detect_path(cached_folder_path)
+            cached_files = self.complete_subpath(cached_folder_path, 
+                                                os.listdir(cached_folder_path))
+            if len(cached_files) == 0:
+                print('Calculating...')
+                flag, lines, flist = self.load_processfolder(process_folder_path, True)
+                if flag == True:
+                    sen_file_list = flist
+                    for line in lines:
+                        sen_seg_list.append(self.segerate_word(line))
+                    for i in range(0, len(flist)):
+                        self.output_file(\
+                            os.path.join(cached_folder_path, sen_file_list[i]), \
+                            sen_seg_list[i])
+                else:
+                    logging.error(u'Loading original files failed.')
+                    return False, u"load error"
             else:
-                logging.error(u'Loading original files failed.')
-                return False, u"load error"
-        else:
-             # loading cached files
-             flag, lines, flist = self.load_processfolder(cached_folder_path, False)
-             if flag == True:
-                 sen_seg_list = lines
-                 sen_file_list = flist
-             else:
-                 logging.error(u'Loading cached files failed.')
-                 return False, u'load error'
-        
-        # begin learning
-        '''
-        text_clst = Pipeline([('vect', CountVectorizer()), \
-                              ('tfidf', TfidfTransformer()), \
-                                ])
-        '''
-        
-        tf_vectorizer = CountVectorizer()
-        
-        # 就是文章中所有的单词，全部都用一个数字进行标记
-        # 然后，对于文章中的单词分别使用这些ID进行替换，而形成的新的数据列表。
-        tf_matrix = tf_vectorizer.fit_transform(sen_seg_list)
-        
-        
-        word_list = tf_vectorizer.get_feature_names()
-        
-        tfidf_transformer = TfidfTransformer()        
-        tfidf_matrix = tfidf_transformer.fit_transform(tf_matrix)
-        
-        tf_weight = tf_matrix.toarray()
-        tfidf_weight = tfidf_matrix.toarray()
-
-        # 打印特征向量文本内容
-        # print 'Features length: ' + str(len(word_list))
-        tf_Res = codecs.open(tf_ResFileName, 'w', 'utf-8')
-        word_list_len = len(word_list)
-        for num in range(word_list_len):
-            if num == word_list_len - 1:
-                tf_Res.write(word_list[num])
-            else:
-                tf_Res.write(word_list[num] + '\t')
-        tf_Res.write('\r\n')
-        tf_Res.close()
-        
-                
-        # 输出tfidf矩阵
-        tfidf_Res = codecs.open(tfidf_ResFileName, 'w', 'utf-8')
-
-        for num in range(word_list_len):
-            if num == word_list_len - 1:
-                tfidf_Res.write(word_list[num])
-            else:
-                tfidf_Res.write(word_list[num] + '\t')
-        tfidf_Res.write('\r\n')
-        tfidf_Res.close()
-
-        tf_kmeans = KMeans(n_clusters = n)
-        tf_kmeans.fit(tfidf_matrix)
-        
-        clusterRes = codecs.open(cluster_ResFileName, 'w', 'utf-8')
-
-        # data_class = pd.read_table('id2class.txt',header=None)
-        count = 1
-        while count <= len(tf_kmeans.labels_):
-            clusterRes.write(str(count) + '\t' + str(tf_kmeans.labels_[count - 1]))
-            clusterRes.write('\r\n')
-            count = count + 1
-        clusterRes.close()
+                 # loading cached files
+                 print('loading...')
+                 flag, lines, flist = self.load_processfolder(cached_folder_path, False)
+                 if flag == True:
+                     sen_seg_list = lines
+                     sen_file_list = flist
+                 else:
+                     logging.error(u'Loading cached files failed.')
+                     return False, u'load error'
+            
+            #calc the dict for file names
+            for i in range(0, len(sen_file_list)):
+                filename, ext = os.path.splitext(sen_file_list[i])
+                sen_file_dict[filename] = i
+            
+            
+            # begin learning
+            tf_vectorizer = CountVectorizer()
+            
+            # 就是文章中所有的单词，全部都用一个数字进行标记
+            # 然后，对于文章中的单词分别使用这些ID进行替换，而形成的新的数据列表。
+            tf_matrix = tf_vectorizer.fit_transform(sen_seg_list)
+            
+            
+            word_list = tf_vectorizer.get_feature_names()
+            
+            tfidf_transformer = TfidfTransformer()        
+            tfidf_matrix = tfidf_transformer.fit_transform(tf_matrix)
+            
+            tf_weight = tf_matrix.toarray()
+            tfidf_weight = tfidf_matrix.toarray()
+    
+            # 打印特征向量文本内容
+            # print 'Features length: ' + str(len(word_list))
+            '''
+            tf_Res = codecs.open(tf_ResFileName, 'w', 'utf-8')
+            word_list_len = len(word_list)
+            for num in range(word_list_len):
+                if num == word_list_len - 1:
+                    tf_Res.write(word_list[num])
+                else:
+                    tf_Res.write(word_list[num] + '\t')
+            tf_Res.write('\r\n')
+            tf_Res.close()
+            '''
+                    
+            # 输出tfidf矩阵
+            '''
+            tfidf_Res = codecs.open(tfidf_ResFileName, 'w', 'utf-8')
+    
+            for num in range(word_list_len):
+                if num == word_list_len - 1:
+                    tfidf_Res.write(word_list[num])
+                else:
+                    tfidf_Res.write(word_list[num] + '\t')
+            tfidf_Res.write('\r\n')
+            tfidf_Res.close()
+            '''
+            
+            # 计算 KMeans 聚类算法
+            tf_kmeans = KMeans(n_clusters = n)
+            tf_kmeans.fit(tfidf_matrix)
+    
+            print (metrics.silhouette_score(tfidf_matrix, tf_kmeans.labels_, metric='euclidean'))
+            print (Counter(tf_kmeans.labels_))  # 打印每个类多少人
+            # 中心点
+            # print(km.cluster_centers_)
+            # 每个样本所属的簇
+            
+            clusterRes = codecs.open(cluster_ResFileName, 'w', 'utf-8') 
+            # data_class = pd.read_table('id2class.txt',header=None)
+            count = 1
+            while count <= len(tf_kmeans.labels_):
+                clusterRes.write(str(count) + '\t' + sen_file_list[count - 1] + \
+                                 '\t' + str(tf_kmeans.labels_[count - 1]))
+                clusterRes.write('\r\n')
+                count = count + 1
+            clusterRes.close()
+            
+            if isinstance(valid_filename, unicode) and \
+                len(valid_filename) > 0 and \
+                os.path.isfile(valid_filename):
+                    valid_labels_s = [u''] * len(sen_file_list)
+                    fval = codecs.open(valid_filename, 'r', encoding='utf-8')
+                    for line in fval:
+                        filename, val = line.split()
+                        truefilename, ext = os.path.splitext(filename)
+                        valid_labels_s[sen_file_dict[truefilename]] = val
+                        tempVct = CountVectorizer()
+                        valid_labels = tempVct.fit_transform(valid_labels_s)
+                    fval.close()
+                    
+                    # calc the SS, SD, DS and DD of valid_labels and 
+                    # tf_kmeans.labels_
+                    
+                    C = tf_kmeans.labels_
+                    C_ = valid_labels.indices
+                    
+                    SS = 0
+                    SD = 0
+                    DS = 0
+                    DD = 0
+                    
+                    for i in range(0, len(sen_file_list)):
+                        for j in range(i+1, len(sen_file_list)):
+                            if C[i] == C[j] and C_[i] == C_[j]:
+                                SS += 1
+                            elif C[i] == C[j] and C_[i] != C_[j]:
+                                SD += 1
+                            elif C[i] != C[j] and C_[i] == C_[j]:
+                                DS += 1
+                            else:
+                                DD += 1
+                                
+                    return True, (tf_kmeans.labels_, SS, SD, DS, DD)
+            
+        except:
+            logging.error(traceback.format_exc())
+            return False, "process fail"
         
 if __name__ == '__main__':
     txClst = Text_Cluster()
-    txClst.process_cluster(trainpath, train_cachepath, output_tf, \
-                           output_tfidf, 3, output_km)
+    state, result = txClst.process_cluster(trainpath, train_cachepath, output_tf, \
+                           output_tfidf, 3, output_km, \
+                           os.path.join(basepath, 'id2class.txt'))
+    
+    if (state == True):
+        a = float(result[1])
+        b = float(result[2])
+        c = float(result[3])
+        d = float(result[4])
+        m = float(len(result[0]))
+        JC = a/(a+b+c)
+        FMI = np.sqrt(np.power(a, 2) / (a+b) / (a+c) )
+        RAND = 2 * (a + d) / (m*(m-1))
+        print(u'计算结果：\nJC：%f\nFMI：%f\nRAND：%f' % (JC, FMI, RAND))
