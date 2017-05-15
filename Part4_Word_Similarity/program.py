@@ -63,33 +63,42 @@ def SetParent(aggc, WordDict):
 def LoadCilin(path):
     AggList = []
     WordDict = {}
-    #try:
-    if isinstance(path, unicode) or isinstance(path, str):
-        fin = codecs.open(path, mode='r',encoding='utf-8')
-        for line in fin:
-            # tag, attr = line.split(u' ', 1)
-            tag, attr = line.split(u' ', 1)
-            agg = Aggregation()
-            agg.tag = tag
-            
-            for word in attr.split(u' '):
-                # word=word.encode('utf-8')
-                word = word.strip()
-                agg.words[word] = 1
-                WordDict[word] = agg
-            
-            AggList.append(agg)
-            # if agg.tag == 'Ga01A01=':
-            #     print 'A'
-            SetParent(agg, WordDict)
-        return True, AggList, WordDict
-    else:
-        raise Exception(u'Invalid Path type')
-    #except Exception:
-    #    logging.error('Loading Cilin file failed.')
-    #    return False, None, None
+    try:
+        if isinstance(path, unicode) or isinstance(path, str):
+            fin = codecs.open(path, mode='r',encoding='utf-8')
+            for line in fin:
+                tag, attr = line.split(u' ', 1)
+                agg = Aggregation()
+                agg.tag = tag
+                
+                for word in attr.split(u' '):
+                    word = word.strip()
+                    agg.words[word] = 1
+                    
+                    # 检测是否有重复的单词映射。如果有，转换为list存储
+                    if word == u'人民':
+                        pass
+                    if WordDict.has_key(word):
+                        if isinstance(WordDict[word], list):
+                            WordDict[word].append(agg)
+                        else:
+                            newList = [WordDict[word], agg]
+                            WordDict[word] = newList
+                    else:
+                        WordDict[word] = agg
+                
+                AggList.append(agg)
+                # if agg.tag == 'Ga01A01=':
+                #     print 'A'
+                SetParent(agg, WordDict)
+            return True, AggList, WordDict
+        else:
+            raise Exception(u'Invalid Path type')
+    except Exception:
+        logging.error('Loading Cilin file failed.')
+        return False, None, None
     
-def CalcDist(word1, word2, WordDict):
+def __calcDist(path1, path2, WordDict):
     a = 0.65
     b = 0.8
     c = 0.9
@@ -97,10 +106,7 @@ def CalcDist(word1, word2, WordDict):
     e = 0.5
     f = 0.1
     
-    try:
-        path1 = WordDict[word1].tag
-        path2 = WordDict[word2].tag
-        
+    try:        
         # find the same 
         idx = -1
         for i in range(0, 8):
@@ -155,6 +161,29 @@ def CalcDist(word1, word2, WordDict):
     except Exception:
         logging.error('Computing distance failed.')
         return False, None
+
+def CalcDist(word1, word2, WordDict):
+    a = WordDict[word1]
+    b = WordDict[word2]
+    if isinstance(a, Aggregation) and isinstance(b, Aggregation):
+        return __calcDist(a.tag, b.tag, WordDict)
+    
+    max_valu = 0.0
+    if not isinstance(a, Aggregation) and isinstance(b, Aggregation):
+        for a_agg in a:
+            a_tag = a_agg.tag
+            max_valu = max(max_valu, __calcDist(a_tag, b.tag, WordDict))
+    elif isinstance(a, Aggregation) and not isinstance(b, Aggregation):
+        for b_agg in b:
+            b_tag = b_agg.tag
+            max_valu = max(max_valu, __calcDist(a.tag, b_tag, WordDict))
+    else:
+        for a_agg in a:
+            a_tag = a_agg.tag
+            for b_agg in b:
+                b_tag = b_agg.tag
+                max_valu = max(max_valu, __calcDist(a_tag, b_tag, WordDict))
+    return max_valu
     
 def PrintWordsList(agg):
     for (word, t) in agg.words.items():
@@ -163,8 +192,8 @@ def PrintWordsList(agg):
 if __name__ == '__main__':            
    state, AggList, WordDict = LoadCilin(dataset)
    if state == True:
-       a = u'娘胎'
-       b = u'穴位'
+       a = u'人民'
+       b = u'同志'
        state, valu = CalcDist(a, b, WordDict)
        if state == True:
            print valu
