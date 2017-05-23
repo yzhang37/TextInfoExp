@@ -7,9 +7,11 @@ import os
 import jieba
 import codecs
 import re
-import math
-import string
+# import math
+# import string
 import numpy as np
+# import random
+# import matplotlib
 
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 #from sklearn.pipeline import Pipeline
@@ -153,6 +155,8 @@ class Text_Cluster(object):
             self.detect_path(cached_folder_path)
             cached_files = self.complete_subpath(cached_folder_path, 
                                                 os.listdir(cached_folder_path))
+            # here is the branch where cached files are not found.
+            # We should never use such a thing to 
             if len(cached_files) == 0:
                 print('Calculating...')
                 flag, lines, flist = self.load_processfolder(process_folder_path, True)
@@ -190,7 +194,6 @@ class Text_Cluster(object):
             # 就是文章中所有的单词，全部都用一个数字进行标记
             # 然后，对于文章中的单词分别使用这些ID进行替换，而形成的新的数据列表。
             tf_matrix = tf_vectorizer.fit_transform(sen_seg_list)
-            
             
             word_list = tf_vectorizer.get_feature_names()
             
@@ -231,8 +234,7 @@ class Text_Cluster(object):
             tf_kmeans = KMeans(n_clusters = n)
             tf_kmeans.fit(tfidf_matrix)
     
-            print (metrics.silhouette_score(tfidf_matrix, tf_kmeans.labels_, metric='euclidean'))
-            print (Counter(tf_kmeans.labels_))  # 打印每个类多少人
+            # print (Counter(tf_kmeans.labels_))  # 打印每个类多少人
             # 中心点
             # print(km.cluster_centers_)
             # 每个样本所属的簇
@@ -281,8 +283,18 @@ class Text_Cluster(object):
                                 DS += 1
                             else:
                                 DD += 1
-                                
-                    return True, (tf_kmeans.labels_, SS, SD, DS, DD)
+                    
+                    list_keyword = [[] for i in range(n)]
+                    
+                    order_centorids = tf_kmeans.cluster_centers_.argsort()[:,::-1]
+                    
+                    for i in range(0, n):
+                        for idx in order_centorids[i,:15]:
+                            list_keyword[i].append(word_list[idx])
+                            
+                    return True, (SS, SD, DS, DD, sen_file_list, list_keyword, \
+                                  Counter(tf_kmeans.labels_), \
+                                  metrics.silhouette_score(tfidf_matrix, tf_kmeans.labels_, metric='euclidean'))
             
         except:
             logging.error(traceback.format_exc())
@@ -290,17 +302,28 @@ class Text_Cluster(object):
         
 if __name__ == '__main__':
     txClst = Text_Cluster()
+    agg_count = 3
     state, result = txClst.process_cluster(trainpath, train_cachepath, output_tf, \
-                           output_tfidf, 3, output_km, \
+                           output_tfidf, agg_count, output_km, \
                            os.path.join(basepath, 'id2class.txt'))
-    
     if (state == True):
-        a = float(result[1])
-        b = float(result[2])
-        c = float(result[3])
-        d = float(result[4])
-        m = float(len(result[0]))
+        a = float(result[0])
+        b = float(result[1])
+        c = float(result[2])
+        d = float(result[3])
+        m = len(result[4])
         JC = a/(a+b+c)
         FMI = np.sqrt(np.power(a, 2) / (a+b) / (a+c) )
-        RAND = 2 * (a + d) / (m*(m-1))
-        print(u'计算结果：\nJC：%f\nFMI：%f\nRAND：%f' % (JC, FMI, RAND))
+        RAND = 2 * (a + d) / (float(m)*(float(m)-1))
+        print(u'计算结果：\nJC：%f\nFMI：%f\nRAND：%f\n边缘值：%f' % (JC, FMI, RAND, result[7]))
+        print '\n'
+        dic = [[]] * agg_count
+        # 随机从接下来的所有的数组里面，每个
+        # 随机选出10个单词进行打印
+        cluster_attr = result[5]
+        counter = result[6]
+        for i in range(0, agg_count):
+            print(u'第%d个分类: 共计%d个文件' % (i, counter[i]))
+            for word in cluster_attr[i]:
+                print word + ' ',
+            print 
