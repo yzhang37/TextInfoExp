@@ -10,7 +10,7 @@ import re
 # import math
 # import string
 import numpy as np
-# import random
+import random
 # import matplotlib
 
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
@@ -146,7 +146,10 @@ class Text_Cluster(object):
                         tfidf_ResFileName, \
                         n, \
                         cluster_ResFileName, \
-                        valid_filename = u''):
+                        valid_filename = u'',
+                        sample_terms_count = 15,
+                        sample_files_count = 3
+                        ):
         try:
             sen_seg_list = []
             sen_file_list = []
@@ -289,12 +292,19 @@ class Text_Cluster(object):
                     order_centorids = tf_kmeans.cluster_centers_.argsort()[:,::-1]
                     
                     for i in range(0, n):
-                        for idx in order_centorids[i,:15]:
+                        for idx in order_centorids[i,:sample_terms_count]:
                             list_keyword[i].append(word_list[idx])
-                            
+                    
+                    list_file = [[] for i in range(n)]
+                    for i in range(0, n):
+                        id_list = np.where(tf_kmeans.labels_ == i)[0].tolist()
+                        for j in random.sample(id_list, sample_files_count):
+                            list_file[i].append(sen_file_list[j])
+                    
                     return True, (SS, SD, DS, DD, sen_file_list, list_keyword, \
                                   Counter(tf_kmeans.labels_), \
-                                  metrics.silhouette_score(tfidf_matrix, tf_kmeans.labels_, metric='euclidean'))
+                                  metrics.silhouette_score(tfidf_matrix, tf_kmeans.labels_, metric='euclidean'),
+                                  list_file)
             
         except:
             logging.error(traceback.format_exc())
@@ -302,7 +312,7 @@ class Text_Cluster(object):
         
 if __name__ == '__main__':
     txClst = Text_Cluster()
-    agg_count = 3
+    agg_count = 4
     state, result = txClst.process_cluster(trainpath, train_cachepath, output_tf, \
                            output_tfidf, agg_count, output_km, \
                            os.path.join(basepath, 'id2class.txt'))
@@ -316,14 +326,19 @@ if __name__ == '__main__':
         FMI = np.sqrt(np.power(a, 2) / (a+b) / (a+c) )
         RAND = 2 * (a + d) / (float(m)*(float(m)-1))
         print(u'计算结果：\nJC：%f\nFMI：%f\nRAND：%f\n边缘值：%f' % (JC, FMI, RAND, result[7]))
-        print '\n'
+        print '\n\n'
         dic = [[]] * agg_count
         # 随机从接下来的所有的数组里面，每个
         # 随机选出10个单词进行打印
         cluster_attr = result[5]
         counter = result[6]
+        file_list = result[8]
         for i in range(0, agg_count):
             print(u'第%d个分类: 共计%d个文件' % (i, counter[i]))
             for word in cluster_attr[i]:
                 print word + ' ',
-            print 
+            print
+            print '随机参考文件:'
+            for file_name in file_list[i]:
+                print '\'' + file_name + '\'' + ' ',
+            print '\n'
