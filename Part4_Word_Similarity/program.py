@@ -149,7 +149,7 @@ def __calcDist(path1, path2, WordDict):
         # calculate n
         agg = WordDict[sameroots]
         n = len(agg.childs)        
-        r = np.cos(float(n) * np.pi / 180) * (n - k + 1) / float(n)
+        r = np.cos(float(n) * np.pi / 180 * (n - k + 1) / float(n))
         if x == 1: # tier 1 same
             return True, a * r
         elif x == 2: # tier 2 same
@@ -192,8 +192,8 @@ def PrintWordsList(agg):
 if __name__ == '__main__':            
    state, AggList, WordDict = LoadCilin(dataset)
    if state == True:
-       a = u'人民'
-       b = u'同志'
+       a = u'国民'
+       b = u'良民'
        state, valu = CalcDist(a, b, WordDict)
        if state == True:
            print valu
