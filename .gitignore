@@ -32,9 +32,14 @@ Part3_Text_Cluster/data.txt
 
 Part4_Word_Similarity/get_data.py
 
-
 Part3_Text_Cluster/cached_offline/
 Part3_Text_Cluster/cached_test/
 Part3_Text_Cluster/out_kmeans.txt
 Part3_Text_Cluster/out_tf.txt
 Part3_Text_Cluster/out_tfidf.txt
+
+Part1_TF-IDF/TF_IDF/__pycache__/
+Part4_Word_Similarity/word2vec/*.txt
+Part4_Word_Similarity/word2vec/corpus.model
+Part4_Word_Similarity/word2vec/corpus.model.bin
+
