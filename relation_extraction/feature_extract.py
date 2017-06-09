@@ -9,10 +9,9 @@ import os.path
 import cPickle
 import jieba
 
-
-pickleDir = "pickle"
-dataDir = "data"
-
+pwd = os.getcwd()
+pickleDir = os.path.join(pwd, "pickle")
+dataDir = os.path.join(pwd, "data")
 
 def load_stopwords():
     with open(os.path.join(dataDir,'stopwords.txt'),'r') as stopwords_file:
@@ -25,7 +24,7 @@ def load_stopwords():
 # 构建字典:词到id、词性到id的映射
 # save_num:按照词频，保留下save_num个词语（去停用词）
 def generateDic2(sentence_filepath,save_num = 15000):
-
+    # 首先生成人物，用来当作固定分词用，比如人物姓名，还有停用字
     jieba.load_userdict(os.path.join(dataDir,'people.txt'))
     jieba.load_userdict(os.path.join(dataDir,'stopwords.txt'))
 
@@ -97,8 +96,7 @@ def align(sentence_filepath,train_filepath,peopleset_filepath):
             entry = line.split('\t')
             p1,p2,relation = entry[0],entry[1],entry[2]
             train_r_dict[p1+','+p2] = relation
-
-
+            
         peopleset = set()
 
         # 人名~
@@ -344,14 +342,17 @@ def evaluation(rsl_filepath,reference_filepath):
 if __name__ == "__main__":
 
     print '--align,and generate trainset and testset.'
-    align('data/sentence.txt','data/train_relation.txt','people.txt')
+    align(os.path.join(dataDir, 'sentence.txt'),
+          os.path.join(dataDir, 'train_relation.txt'),
+          os.path.join(dataDir, 'people.txt'),
+          )
 
     print '--generate dic.'
-    generateDic2('data/sentence.txt')
+    generateDic2(os.path.join(dataDir, 'sentence.txt'))
 
     print '--feature extract.'
-    feature_extract2('data/train.txt')
-    feature_extract2('data/test.txt')
+    feature_extract2(os.path.join(dataDir, 'train.txt'))
+    feature_extract2(os.path.join(dataDir, 'test.txt'))
 
     # 在使用libsvm进行训练和预测以后进行结果整理和评测
     # print '--generate result and evaluate.'
