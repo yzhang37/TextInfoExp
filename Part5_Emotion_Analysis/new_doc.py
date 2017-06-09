@@ -9,11 +9,14 @@ import jieba
 import jieba.posseg as pseg
 # 数据缓存工具
 import cPickle
+import numpy as np
 import sklearn
 import platform
 import re
 import traceback
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import scale
+from sklearn.linear_model import SGDClassifier
 from gensim.models.word2vec import Word2Vec
 from gensim.models.doc2vec import Doc2Vec
 
@@ -89,8 +92,10 @@ def LoadAndMakePickle(train_tag = 'pos'):
             for w, p in dat_2:
                 word.append(w)
                 pos.append(p)
-            wordline = ' '.join(word)
-            finally_data_list.append(wordline)
+                
+            finally_data_list.append(word)
+            # wordline = ' '.join(word)
+            # finally_data_list.append(wordline)
             finally_wordposseg_list.append((word, pos))
             line_idx += 1
             if line_idx % 100 == 0:
@@ -117,6 +122,21 @@ def LoadPickle(load_tag = 'pos'):
         return finally_data_list, finally_wordposseg_list
     except:
         traceback.print_exc()
+
+# 就是将这一整篇文章所有的单词全部一起计算
+# 然后计算平均值，作为整一篇文章的向量值。
+def BuildWordVector(clf, text, size):
+    vec = np.zeros(size).reshape((1, size))
+    count = 0
+    for word in text:
+        try:
+            vec += clf[word].reshape((1, size))
+            count += 1
+        except KeyError:
+            continue
+    if count != 0:
+        vec /= count
+    return vec
     
 if __name__ == '__main__':
     pos_data, pos_wordposs = None, None
@@ -127,7 +147,32 @@ if __name__ == '__main__':
     else:
         pos_data, pos_wordposs = LoadPickle('pos')
         neg_data, neg_wordposs = LoadPickle('neg')
-    #现在我们已经获得了所有的数据，可以开始工作获得了
-    print(u'加载完成!')
+    #use 1 for positive sentiment, 0 for negative sentiment
+    print('加载完成!')
+    
+    y = np.concatenate((np.ones(len(pos_data)), np.zeros(len(neg_data))))
+    
+    x_train, x_test, y_train, y_test = \
+        train_test_split(np.concatenate((pos_data, neg_data)), y, test_size = 0.1)
+    
+    n_dim = 300
+    
+    # 初始化模型并构建词汇
+    imdb_w2v = Word2Vec(size=n_dim, min_count=10)
+    imdb_w2v.build_vocab(x_train)
+    
+    train_vecs = np.concatenate([BuildWordVector(imdb_w2v, text, n_dim) for text in x_train])
+    train_vecs = scale(train_vecs)
+    
+    imdb_w2v.train(x_test, total_examples=len(x_train) + len(x_test), epochs=imdb_w2v.iter)
+    
+    test_vecs = np.concatenate([BuildWordVector(imdb_w2v, text, n_dim) for text in x_test])
+    test_vecs = scale(test_vecs)
+    
+    
+    lr = SGDClassifier(loss='log', penalty='l1')
+    lr.fit(train_vecs, y_train)
+    
+    print('测试精确率: %.6f' % lr.score(test_vecs, y_test))
     
     
