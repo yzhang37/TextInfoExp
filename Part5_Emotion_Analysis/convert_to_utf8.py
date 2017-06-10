@@ -27,14 +27,13 @@ def detnconv(path):
             fin.close()
         except:
             logging.error(path)
-        
-        
-def cascadeScan(path):
-    if os.path.isdir(path):
-        for child in os.listdir(path):
-            if os.path.isdir(os.path.join(path, child)):
-                cascadeScan(os.path.join(path, child))
-            else:
-                detnconv(os.path.join(path, child))
-                
-cascadeScan(data_path)
+
+file_idx = 0    
+for base, dirs, files in os.walk(data_path):
+    for file in files:
+        if file != u'.DS_Store' and file != u'Desktop.ini':
+            detnconv(os.path.join(base, file))
+            file_idx += 1
+            if file_idx % 100 == 0:
+                print(u'处理 %d 个文件' % file_idx)
+print(u'共计处理 %d 个文件' % file_idx)

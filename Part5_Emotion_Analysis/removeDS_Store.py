@@ -9,7 +9,7 @@ base_path = os.getcwdu()
 for base, dirs, files in os.walk(base_path):
     flag = 0
     for file in files:
-        if file == '.DS_Store':
+        if file == u'.DS_Store' or file == u'Desktop.ini':
             if (flag == 0):
                 print('在'+base+'下：')
                 flag = 1

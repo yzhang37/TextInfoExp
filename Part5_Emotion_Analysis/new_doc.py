@@ -1,8 +1,6 @@
 # encoding: utf-8
 import sys
 import os
-reload(sys)
-sys.setdefaultencoding('utf-8')
 # 简单分词工具
 import jieba
 # 带词义检查的分词工具
@@ -18,29 +16,14 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import scale
 from sklearn.linear_model import SGDClassifier
 from gensim.models.word2vec import Word2Vec
-from gensim.models.doc2vec import Doc2Vec
+reload(sys)
+sys.setdefaultencoding('utf-8')
 
-# 本地文件，用于中文简体和繁体互相转换使用
-import langconv
 # 启用并行计算，加快分词系统的计算
 jieba.enable_parallel = True
 base_path = os.getcwdu()
 train_path = os.path.join(base_path, 'htl')
 train_cached_path = os.path.join(base_path, 'htl_cached')
-
-class ChineseConv(object):
-    def __init__(self):
-        self._simpconv = langconv.Converter('zh-hans')
-        self._tradconv = langconv.Converter('zh-hant')
-        
-    def s2t(self, sentence):
-        return self._simpconv.convert(sentence)
-    
-    def t2s(self, sentence):
-        return self._tradconv.convert(sentence)
-
-#  定义一个全局的中文简体/翻译转换工具    
-cc = ChineseConv()
 
 def detectOS():
     os = (platform.system()).lower()
@@ -137,7 +120,29 @@ def BuildWordVector(clf, text, size):
     if count != 0:
         vec /= count
     return vec
+
+class AutoMean(object):
+    def __init__(self):
+        self.Clear()
+        
+    def Clear(self):
+        self._iter = 0.0
+        self._sum = 0.0
     
+    def Add(self, val):
+        if (self._iter == 0):
+            self._sum = val
+        else:
+            self._sum *= (self._iter) / (self._iter + 1)
+            self._sum += val / (self._iter + 1)
+        self._iter += 1
+    
+    def Value(self):
+        return self._sum
+    
+    def Total(self):
+        return self._sum * self._iter
+
 if __name__ == '__main__':
     pos_data, pos_wordposs = None, None
     neg_data, neg_wordposs = None, None
@@ -152,27 +157,30 @@ if __name__ == '__main__':
     
     y = np.concatenate((np.ones(len(pos_data)), np.zeros(len(neg_data))))
     
-    x_train, x_test, y_train, y_test = \
-        train_test_split(np.concatenate((pos_data, neg_data)), y, test_size = 0.1)
+    mean = AutoMean()
     
-    n_dim = 300
-    
-    # 初始化模型并构建词汇
-    imdb_w2v = Word2Vec(size=n_dim, min_count=10)
-    imdb_w2v.build_vocab(x_train)
-    
-    train_vecs = np.concatenate([BuildWordVector(imdb_w2v, text, n_dim) for text in x_train])
-    train_vecs = scale(train_vecs)
-    
-    imdb_w2v.train(x_test, total_examples=len(x_train) + len(x_test), epochs=imdb_w2v.iter)
-    
-    test_vecs = np.concatenate([BuildWordVector(imdb_w2v, text, n_dim) for text in x_test])
-    test_vecs = scale(test_vecs)
-    
-    
-    lr = SGDClassifier(loss='log', penalty='l1')
-    lr.fit(train_vecs, y_train)
-    
-    print('测试精确率: %.6f' % lr.score(test_vecs, y_test))
-    
-    
+    for i in range(100):
+        x_train, x_test, y_train, y_test = \
+            train_test_split(np.concatenate((pos_data, neg_data)), y, test_size = 0.1)
+        
+        n_dim = 300
+            
+        # 初始化模型并构建词汇
+        imdb_w2v = Word2Vec(size=n_dim, min_count=10)
+        imdb_w2v.build_vocab(x_train)
+        imdb_w2v.train(x_train, total_examples=len(x_train) + len(x_test), epochs=imdb_w2v.iter)
+        
+        train_vecs = np.concatenate([BuildWordVector(imdb_w2v, text, n_dim) for text in x_train])
+        train_vecs = scale(train_vecs)
+        
+        imdb_w2v.train(x_test, total_examples=len(x_train) + len(x_test), epochs=imdb_w2v.iter)
+        test_vecs = np.concatenate([BuildWordVector(imdb_w2v, text, n_dim) for text in x_test])
+        test_vecs = scale(test_vecs)
+        
+        
+        lr = SGDClassifier(loss='log', penalty='l1')
+        lr.fit(train_vecs, y_train)
+        prec = lr.score(test_vecs, y_test)
+        print('测试精确率: %.6f' % prec)
+        mean.Add(prec)
+    print('平均精确率：%.6f' % mean.Value())
