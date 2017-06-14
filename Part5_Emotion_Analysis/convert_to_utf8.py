@@ -9,7 +9,7 @@ reload(sys)
 sys.setdefaultencoding('utf-8')
 
 base_path = os.getcwdu()
-data_path = os.path.join(base_path, u'htl')
+data_path = os.path.join(base_path, u'weibo')
 
 def detnconv(path):
     if os.path.isfile(path):
