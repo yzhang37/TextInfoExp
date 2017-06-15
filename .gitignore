@@ -52,3 +52,7 @@ Part5_Emotion_Analysis/weibo
 
 # disable all the project files for spyder
 .spyproject/
+
+langconv.py
+zh_wiki.py
+Part6_Relation_Extraction/cached/
