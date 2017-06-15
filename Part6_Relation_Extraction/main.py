@@ -14,9 +14,12 @@ import langconv
 import traceback
 import cPickle
 import string
-from gensim.models import Word2Vec
+import numpy as np
 import jieba
 import re
+from sklearn.preprocessing import scale
+from gensim.models import Word2Vec
+from sklearn import svm
 reload(sys)
 sys.setdefaultencoding('utf-8')
 
@@ -63,17 +66,36 @@ def relation2id(rel):
     else:
         return -1
 
+def formatSize(bytes):
+    try:
+        bytes = float(bytes)
+        kb = bytes / 1024
+    except:
+        print("传入的字节格式不对")
+        return "Error"
+
+    if kb >= 1024:
+        M = kb / 1024
+        if M >= 1024:
+            G = M / 1024
+            return "%fGB" % (G)
+        else:
+            return "%fMB" % (M)
+    else:
+        return "%fkB" % (kb)
+
 def dump_file(obj, filename):
     fout = open(filename, 'wb')
     cPickle.dump(obj, fout)
     fout.close()
-    print("已经缓存文件 '%s'。" % filename)
+    print("已经缓存文件 '%s'。")
 
 def load_dump(filename):
     fin = open(filename, 'rb')
     obj = cPickle.load(fin)
     fin.close()
-    print("已经从文件 '%s' 读入缓存。" % filename)
+    print("已经从文件 '%s' 读入缓存，大小 %s。" \
+          % (filename, formatSize(os.path.getsize(filename))))
     return obj
 
 def simp_chinese(path):
@@ -213,9 +235,27 @@ def build_study(text_data, rela, window = 3, ignore_rel = False):
                 sent_item = parseList(line, vct)
                 yield (line_users[j], line_users[k]), sent_item, rel
 
+# 就是将这一整篇文章所有的单词全部一起计算
+# 然后计算平均值，作为整一篇文章的向量值。
+def BuildWordVector(clf, text, size):
+    vec = np.zeros(size).reshape((1, size))
+    count = 0
+    for word in text:
+        try:
+            vec += clf[word].reshape((1, size))
+            count += 1
+        except KeyError:
+            continue
+    if count != 0:
+        vec /= count
+    return vec
+
+
+# 调试用的简单输出函数
 def s_print(l):
     for w in l:
         print w
+        
 
 if __name__ == '__main__':
     # 在程序的开始部分读入了名字，这样分次器就可以
@@ -241,27 +281,84 @@ if __name__ == '__main__':
     for n1, n2, rel in \
     get_relation(os.path.join(data_path, 'train_relation.txt')):
         set_relation(n1, n2, rel, train_relation)
+    test_relation = {}
+    for n1, n2, rel in \
+    get_relation(os.path.join(data_path, 'test_relation.txt')):
+        set_relation(n1, n2, rel, test_relation)    
+    
     
     # 如果关闭，那么永远不会读取缓存数据，也不会生成缓存数据
     accept_tt_cache = True
     
     trainfile_path = os.path.join(cached_path, 'train')
     testfile_path = os.path.join(cached_path, 'test')
-    Users, X, y = None, None, None
+    
+    class Study(object):
+        def __init__(self):
+            self.Users = None
+            self.X = None
+            self.y = None
+    
+    train = Study()
     if not accept_tt_cache or not os.path.exists(trainfile_path):
-        Users, X, y = [], [], []
+        train.Users, train.X, train.y = [], [], []
         line_idx = 0
         for namegroup, sent, target in build_study(textdata, train_relation):
-            if (y != -1):
-                Users.append(namegroup)
-                X.append(sent)
-                y.append(target)
+            if (target != -1):
+                train.Users.append(namegroup)
+                train.X.append(sent)
+                train.y.append(target)
                 line_idx += 1
-            if (line_idx % 5000 == 0):
-                print("处理 %d 个文件" % line_idx)
+                if (line_idx % 5000 == 0):
+                    print("处理 %d 个文件" % line_idx)
         print("处理 %d 个文件" % line_idx)
         if accept_tt_cache:
-            dump_file((Users, X, y), trainfile_path)
+            dump_file(train, trainfile_path)
     else:
-        (Users, X, y) = load_dump(trainfile_path)
+        train = load_dump(trainfile_path)
     
+    test = Study()
+    if not accept_tt_cache or not os.path.exists(testfile_path):
+        test.Users, test.X, test.y = [], [], []
+        line_idx = 0
+        for namegroup, sent, target in build_study(textdata, test_relation):
+            if (target != -1):
+                test.Users.append(namegroup)
+                test.X.append(sent)
+                test.y.append(target)
+                line_idx += 1
+                if (line_idx % 5000 == 0):
+                    print("处理 %d 个文件" % line_idx)
+        print("处理 %d 个文件" % line_idx)
+        if accept_tt_cache:
+            dump_file(test, testfile_path)
+    else:
+        test = load_dump(testfile_path)
+    pass   
+    
+    # ndim: 是总共的向量的大小
+    n_dim = 300
+    
+    imdb_w2v = Word2Vec(size=n_dim, min_count=10)
+    imdb_w2v.build_vocab(train.X)
+    
+    imdb_w2v.train(train.X, \
+                   total_examples=len(train.X) + len(test.X), \
+                   epochs=imdb_w2v.iter)
+    train_vecs = np.concatenate([BuildWordVector(imdb_w2v, text, n_dim) \
+                                 for text in train.X])
+    train_vecs = scale(train_vecs)
+    
+    
+    imdb_w2v.train(test.X, \
+                   total_examples=len(train.X) + len(test.X), \
+                   epochs=imdb_w2v.iter)
+    test_vecs = np.concatenate([BuildWordVector(imdb_w2v, text, n_dim) \
+                                 for text in test.X])
+    test_vecs = scale(test_vecs)
+    
+    
+    clf = svm.SVC()
+    clf.fit(train_vecs, train.y)
+    prec = clf.score(test_vecs, test.y)
+    print('%.6f' % prec)
