@@ -49,4 +49,6 @@ relation_extraction/data/
 Part5_Emotion_Analysis/htl
 Part5_Emotion_Analysis/htl_cached
 Part5_Emotion_Analysis/weibo
-Part5_Emotion_Analysis/.spyproject/
+
+# disable all the project files for spyder
+.spyproject/
