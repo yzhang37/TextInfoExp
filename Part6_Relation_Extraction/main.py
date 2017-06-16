@@ -17,7 +17,10 @@ import string
 import numpy as np
 import jieba
 import re
+import codecs
 from sklearn.preprocessing import scale
+from sklearn.linear_model import SGDClassifier
+import sklearn.metrics as metrics
 from gensim.models import Word2Vec
 from sklearn import svm
 reload(sys)
@@ -88,7 +91,7 @@ def dump_file(obj, filename):
     fout = open(filename, 'wb')
     cPickle.dump(obj, fout)
     fout.close()
-    print("已经缓存文件 '%s'。")
+    print("已经缓存文件 '%s'。" % filename)
 
 def load_dump(filename):
     fin = open(filename, 'rb')
@@ -256,6 +259,19 @@ def s_print(l):
     for w in l:
         print w
         
+def calcDocs(clf, textdata, n_dim):
+    dats = []
+    line_idx = 0
+    for text in textdata:
+        dats.append(BuildWordVector(clf, text, n_dim))
+        line_idx += 1
+        if line_idx % 5000 == 0:
+            print("处理 %d 个文件" % line_idx)
+    print("处理 %d 个文件" % line_idx)
+    vct = np.concatenate(dats)
+    vct = scale(vct)
+    return vct
+    
 
 if __name__ == '__main__':
     # 在程序的开始部分读入了名字，这样分次器就可以
@@ -286,13 +302,13 @@ if __name__ == '__main__':
     get_relation(os.path.join(data_path, 'test_relation.txt')):
         set_relation(n1, n2, rel, test_relation)    
     
-    
     # 如果关闭，那么永远不会读取缓存数据，也不会生成缓存数据
     accept_tt_cache = True
     
     trainfile_path = os.path.join(cached_path, 'train')
     testfile_path = os.path.join(cached_path, 'test')
     
+    # 这是一个用于存放学习数据信息的类
     class Study(object):
         def __init__(self):
             self.Users = None
@@ -334,31 +350,46 @@ if __name__ == '__main__':
             dump_file(test, testfile_path)
     else:
         test = load_dump(testfile_path)
-    pass   
     
     # ndim: 是总共的向量的大小
-    n_dim = 300
-    
-    imdb_w2v = Word2Vec(size=n_dim, min_count=10)
+    n_dim = 60
+    # size
+    # 
+    # min_count: 词频少于改值的单词会被丢弃掉。
+    #
+    imdb_w2v = Word2Vec(size=n_dim, min_count=2)
     imdb_w2v.build_vocab(train.X)
     
     imdb_w2v.train(train.X, \
                    total_examples=len(train.X) + len(test.X), \
                    epochs=imdb_w2v.iter)
-    train_vecs = np.concatenate([BuildWordVector(imdb_w2v, text, n_dim) \
-                                 for text in train.X])
-    train_vecs = scale(train_vecs)
     
+    train_vecs = calcDocs(imdb_w2v, train.X, n_dim)
     
     imdb_w2v.train(test.X, \
                    total_examples=len(train.X) + len(test.X), \
                    epochs=imdb_w2v.iter)
-    test_vecs = np.concatenate([BuildWordVector(imdb_w2v, text, n_dim) \
-                                 for text in test.X])
-    test_vecs = scale(test_vecs)
     
+    test_vecs = calcDocs(imdb_w2v, test.X, n_dim)
+     
+    #clf = SGDClassifier(loss='log', penalty='l1')
+    #clf.fit(train_vecs, train.y)
+    test_predict = None
+    if not os.path.exists(os.path.join(cached_path, 'test_predict%d' % (n_dim))):
+        clf = svm.SVC()
+        clf.fit(train_vecs, train.y)
+        test_predict = clf.predict(test_vecs)
+        dump_file(test_predict, os.path.join(cached_path, 'test_predict%d' % (n_dim)))
+    else:
+        test_predict = load_dump(os.path.join(cached_path, 'test_predict%d' % (n_dim)))
     
-    clf = svm.SVC()
-    clf.fit(train_vecs, train.y)
-    prec = clf.score(test_vecs, test.y)
-    print('%.6f' % prec)
+    fout = codecs.open(os.path.join(cached_path, "output.txt"), 'w', 'utf_8_sig')
+    fout.write(u'人名1\t人名2\t预测\t目标\n')
+    for i in range(len(test_predict)):
+        fout.write('%s\t%s\t%s\t%s\n' % (test.Users[i][0], test.Users[i][1], id2rel[test_predict[i]], id2rel[test.y[i]]))
+    fout.close()
+    print(u'准确率:%.6f' % metrics.accuracy_score(test.y, test_predict))
+    print(metrics.classification_report(y_true=test.y,
+                                        y_pred=test_predict,
+                                        target_names=[item[0] for item in sorted(rel2id.items(), key=lambda x:x[1])]
+                                        ))
