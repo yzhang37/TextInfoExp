@@ -186,7 +186,7 @@ if __name__ == '__main__':
         # 训练集 首先通过 imdb_w2v 训练样本，然后导出句子对应的词向量，计算每个评论的平均值。
         # 最后根据高斯分布进行调整
         imdb_w2v.train(x_train, total_examples=len(x_train) + len(x_test), epochs=imdb_w2v.iter)
-        train_vecs = np.concatenate([BuildWordVector(imdb_w2v, text, n_dim) for text in x_train])
+        train_vecs = np.concatenate([BuildWordVectorç(imdb_w2v, text, n_dim) for text in x_train])
         train_vecs = scale(train_vecs)
         
         # 测试集
